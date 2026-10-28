@@ -164,6 +164,23 @@ export default function DashboardPage() {
                 View Completed DVI
               </a>
             </div>
+            {/* Quotes & Estimates Card */}
+            <div className="border border-gray-200 rounded-lg p-5 hover:border-blue-500 transition flex flex-col justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">
+                  💵 Estimates & Quotes
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  View all customer quotes, approvals, and re-send text links.
+                </p>
+              </div>
+              <a
+                href="/dashboard/quotes"
+                className="mt-4 inline-block text-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded transition"
+              >
+                View All Quotes
+              </a>
+            </div>
           </div>
         </div>
       </div>

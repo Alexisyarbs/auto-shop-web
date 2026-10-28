@@ -289,6 +289,16 @@ function NewQuoteContent() {
 
     setSubmitting(false);
     router.push("/dashboard/diagnostics/completed");
+    if (sendSms && customer?.phone) {
+      const publicQuoteUrl = `${window.location.origin}/quote/${publicToken}`;
+      const smsMessage = `Hi ${customer.name}, here is your vehicle repair estimate: ${publicQuoteUrl}`;
+
+      // Opens the phone's native text messaging app automatically
+      window.location.href = `sms:${customer.phone}?body=${encodeURIComponent(smsMessage)}`;
+    } else {
+      alert("Quote saved successfully!");
+      router.push("/dashboard/diagnostics/completed");
+    }
   }
 
   if (loading)
