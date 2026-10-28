@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { createClient } from "../../../utils/supabase/client";
 
 type Customer = {
@@ -34,7 +34,7 @@ type InspectionResultState = {
   };
 };
 
-export default function DiagnosticsWorkspacePage() {
+function DiagnosticsWorkspaceContent() {
   const supabase = createClient();
   const [shopId, setShopId] = useState<string | null>(null);
   const [shopUserId, setShopUserId] = useState<string | null>(null);
@@ -866,5 +866,19 @@ export default function DiagnosticsWorkspacePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DiagnosticsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-gray-500">
+          Loading diagnostics workspace...
+        </div>
+      }
+    >
+      <DiagnosticsWorkspaceContent />
+    </Suspense>
   );
 }
