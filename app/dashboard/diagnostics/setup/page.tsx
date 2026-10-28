@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "../../../../utils/supabase/client";
 
 type DiagnosticItem = {
@@ -9,7 +9,7 @@ type DiagnosticItem = {
   name: string;
 };
 
-export default function DiagnosticsSetupPage() {
+function DiagnosticsSetupContent() {
   const supabase = createClient();
   const [items, setItems] = useState<DiagnosticItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,5 +195,15 @@ export default function DiagnosticsSetupPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function DiagnosticsSetupPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-center text-gray-500">Loading...</div>}
+    >
+      <DiagnosticsSetupContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "../../../utils/supabase/client";
 
 type QuoteRow = {
@@ -16,7 +16,7 @@ type QuoteRow = {
   }[];
 };
 
-export default function QuotesHubPage() {
+function QuotesHubContent() {
   const supabase = createClient();
   const [quotes, setQuotes] = useState<QuoteRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,5 +173,15 @@ export default function QuotesHubPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function QuotesHubPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-center text-gray-500">Loading...</div>}
+    >
+      <QuotesHubContent />
+    </Suspense>
   );
 }

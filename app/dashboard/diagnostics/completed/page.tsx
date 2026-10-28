@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "../../../../utils/supabase/client";
 
 type DiagnosticSession = {
@@ -18,7 +18,7 @@ type DiagnosticSession = {
   }[];
 };
 
-export default function CompletedDiagnosticsPage() {
+function CompletedDiagnosticsContent() {
   const supabase = createClient();
   const [diagnostics, setDiagnostics] = useState<DiagnosticSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,5 +164,15 @@ export default function CompletedDiagnosticsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CompletedDiagnosticsPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-center text-gray-500">Loading...</div>}
+    >
+      <CompletedDiagnosticsContent />
+    </Suspense>
   );
 }

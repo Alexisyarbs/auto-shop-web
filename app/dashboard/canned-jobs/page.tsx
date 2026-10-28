@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "../../../utils/supabase/client";
 
 type CannedJobItem = {
@@ -18,7 +18,7 @@ type CannedJob = {
   canned_jobs_items?: CannedJobItem[];
 };
 
-export default function CannedJobsPage() {
+function CannedJobsContent() {
   const supabase = createClient();
   const [cannedJobs, setCannedJobs] = useState<CannedJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -735,5 +735,15 @@ export default function CannedJobsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CannedJobsPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-center text-gray-500">Loading...</div>}
+    >
+      <CannedJobsContent />
+    </Suspense>
   );
 }
