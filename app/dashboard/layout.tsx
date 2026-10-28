@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "../../utils/supabase/server";
 
+export const instant = false;
+
 export default async function DashboardLayout({
   children,
 }: {
