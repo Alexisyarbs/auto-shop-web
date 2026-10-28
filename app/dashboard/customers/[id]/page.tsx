@@ -1,8 +1,6 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "../../../../utils/supabase/client";
 
@@ -38,7 +36,7 @@ type Quote = {
   created_at: string;
 };
 
-export default function CustomerProfilePage() {
+function CustomerProfileContent() {
   const params = useParams();
   const customerId = params.id as string;
   const router = useRouter();
@@ -597,5 +595,15 @@ export default function CustomerProfilePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CustomerProfilePage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-center text-gray-500">Loading...</div>}
+    >
+      <CustomerProfileContent />
+    </Suspense>
   );
 }
