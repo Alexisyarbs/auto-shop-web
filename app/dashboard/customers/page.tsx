@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "../../../utils/supabase/client";
 
 type Customer = {
@@ -11,7 +11,7 @@ type Customer = {
   created_at: string;
 };
 
-export default function CustomersPage() {
+function CustomersContent() {
   const supabase = createClient();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -245,5 +245,15 @@ export default function CustomersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-center text-gray-500">Loading...</div>}
+    >
+      <CustomersContent />
+    </Suspense>
   );
 }
