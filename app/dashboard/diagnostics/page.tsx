@@ -30,6 +30,7 @@ type InspectionResultState = {
   [itemId: string]: {
     grade: "green" | "yellow" | "red";
     mechanic_notes: string;
+    media_url?: string;
   };
 };
 
@@ -116,6 +117,36 @@ export default function DiagnosticsWorkspacePage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  async function handleFileUpload(
+    itemId: string,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = e.target.files?.[0];
+    if (!file || !shopId) return;
+
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `${shopId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("inspection-media")
+      .upload(filePath, file);
+
+    if (uploadError) {
+      alert("Error uploading file: " + uploadError.message);
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("inspection-media")
+      .getPublicUrl(filePath);
+
+    setResults((prev) => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], media_url: publicUrlData.publicUrl },
+    }));
+  }
 
   async function fetchCustomers(currentShopId: string) {
     const { data } = await supabase
@@ -610,16 +641,35 @@ export default function DiagnosticsWorkspacePage() {
                       </div>
                     </div>
 
-                    <div>
+                    {/* Notes & Media Upload */}
+                    <div className="flex flex-col md:flex-row gap-3 items-center">
                       <input
                         type="text"
-                        placeholder="Add mechanic notes or recommendation (e.g., 3mm remaining, replace soon)..."
+                        placeholder="Add mechanic notes or recommendation..."
                         value={results[item.id]?.mechanic_notes || ""}
                         onChange={(e) =>
                           handleNotesChange(item.id, e.target.value)
                         }
-                        className="w-full text-sm rounded border border-gray-200 p-2 bg-gray-50 focus:bg-white focus:border-blue-500 focus:outline-none"
+                        className="flex-1 w-full text-sm rounded border border-gray-200 p-2 bg-gray-50 focus:bg-white focus:outline-none"
                       />
+
+                      <div className="flex items-center gap-2 w-full md:w-auto">
+                        {results[item.id]?.media_url ? (
+                          <span className="text-xs text-green-600 font-semibold bg-green-50 px-2 py-1 rounded border border-green-200">
+                            📷 Media Attached ✓
+                          </span>
+                        ) : (
+                          <label className="cursor-pointer text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-3 py-2 rounded border border-gray-300 transition flex items-center gap-1">
+                            <span>📷 Add Photo/Video</span>
+                            <input
+                              type="file"
+                              accept="image/*,video/*"
+                              onChange={(e) => handleFileUpload(item.id, e)}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
