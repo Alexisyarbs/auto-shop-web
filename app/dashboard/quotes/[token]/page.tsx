@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "../../../../utils/supabase/client";
 
-export default function PublicQuotePage() {
+function PublicQuoteContent() {
   const supabase = createClient();
   const params = useParams();
   const token = params.token as string;
@@ -301,5 +301,19 @@ export default function PublicQuotePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PublicQuotePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-gray-500">
+          Loading quote builder...
+        </div>
+      }
+    >
+      <PublicQuoteContent />
+    </Suspense>
   );
 }

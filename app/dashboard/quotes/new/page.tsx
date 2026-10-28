@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "../../../../utils/supabase/client";
 
@@ -19,7 +19,7 @@ type QuoteJob = {
   items: QuoteItem[];
 };
 
-export default function NewQuotePage() {
+function NewQuoteContent() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -574,5 +574,19 @@ export default function NewQuotePage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function NewQuotePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-gray-500">
+          Loading quote builder...
+        </div>
+      }
+    >
+      <NewQuoteContent />
+    </Suspense>
   );
 }
