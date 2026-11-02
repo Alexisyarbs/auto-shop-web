@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../utils/supabase/client";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const router = useRouter();
   const supabase = createClient();
   const [shopName, setShopName] = useState<string>("Loading shop...");
@@ -185,5 +185,12 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+export default function DiagnosticsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading diagnostics workspace...</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }

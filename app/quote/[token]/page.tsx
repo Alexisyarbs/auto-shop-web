@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useParams } from "next/navigation";
-import { createClient } from "../../../../utils/supabase/client";
+import { createClient } from "../../../utils/supabase/client";
 
 function PublicQuoteContent() {
   const supabase = createClient();
