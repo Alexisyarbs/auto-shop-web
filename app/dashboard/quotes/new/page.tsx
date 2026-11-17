@@ -17,6 +17,7 @@ type QuoteJob = {
   description: string;
   inspection_grade?: "red" | "yellow" | null;
   items: QuoteItem[];
+  assigned_shop_user_id?: string | null;
 };
 
 function NewQuoteContent() {
@@ -27,6 +28,7 @@ function NewQuoteContent() {
   const diagnosticId = searchParams.get("diagnostic_id");
   const customerId = searchParams.get("customer_id");
   const carId = searchParams.get("car_id");
+  const [mechanicsList, setMechanicsList] = useState<any[]>([]);
 
   const [shopId, setShopId] = useState<string | null>(null);
   const [customer, setCustomer] = useState<{
@@ -55,6 +57,20 @@ function NewQuoteContent() {
         .single();
       if (!shopData) return;
       setShopId(shopData.id);
+
+      // Fetch Shop Mechanics for job assignment
+      const { data: staffData } = await supabase
+        .from("shop_user")
+        .select(
+          `
+    id,
+    name,
+    roles:roles_id ( name )
+  `,
+        )
+        .eq("shop_id", shopData.id);
+
+      if (staffData) setMechanicsList(staffData);
 
       if (customerId) {
         const { data: cust } = await supabase
@@ -257,6 +273,7 @@ function NewQuoteContent() {
             ? `[${job.inspection_grade?.toUpperCase() || "INFO"}] ${job.description}`
             : null,
           customer_decision: "pending",
+          assigned_shop_user_id: job.assigned_shop_user_id || null,
         })
         .select()
         .single();
@@ -429,6 +446,33 @@ function NewQuoteContent() {
                     }}
                     className="block w-full rounded-md border border-gray-200 p-1.5 text-xs text-gray-600 bg-gray-50 focus:bg-white"
                   />
+                  <div className="pt-2 border-t border-gray-100 flex items-center gap-4">
+                    <div className="w-full sm:w-80">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                        Assigned Technician
+                      </label>
+                      <select
+                        value={job.assigned_shop_user_id || ""}
+                        onChange={(e) => {
+                          const updated = [...jobs];
+                          updated[jobIndex].assigned_shop_user_id =
+                            e.target.value || null;
+                          setJobs(updated);
+                        }}
+                        className="w-full rounded border border-gray-300 p-1.5 text-xs bg-white font-medium text-gray-800"
+                      >
+                        <option value="">
+                          -- Unassigned (Shop General) --
+                        </option>
+                        {mechanicsList.map((mech) => (
+                          <option key={mech.id} value={mech.id}>
+                            {mech.name || "Unnamed Staff"} (
+                            {mech.roles?.name || "Mechanic"})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
                 <div className="text-right flex items-center space-x-3">
                   <div>

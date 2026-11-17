@@ -8,6 +8,7 @@ type QuoteRow = {
   created_at: string;
   overall_status: string;
   public_token: string;
+  car_id?: string;
   customer?: { name: string; phone: string };
   car?: { year: number; make: string; model: string };
   quote_jobs?: {
@@ -46,6 +47,51 @@ function QuotesHubContent() {
     }
     fetchQuotes();
   }, []);
+
+  async function handleUpdateStatus(
+    quoteId: string,
+    carId?: string,
+    nextStage?: string,
+  ) {
+    let newQuoteStatus = nextStage;
+    let newCarStatus = nextStage;
+
+    // Update Quote status and Car status in Supabase
+    const { error: quoteError } = await supabase
+      .from("quotes")
+      .update({ overall_status: newQuoteStatus })
+      .eq("id", quoteId);
+
+    if (quoteError) {
+      console.error("Error updating quote status:", quoteError);
+      alert("Failed to update status.");
+      return;
+    }
+
+    if (carId) {
+      await supabase
+        .from("car")
+        .update({ status: newCarStatus })
+        .eq("id", carId);
+    }
+
+    // Update local state so UI updates immediately without a full refresh
+    setQuotes(
+      quotes.map((q) =>
+        q.id === quoteId ? { ...q, overall_status: newQuoteStatus! } : q,
+      ),
+    );
+  }
+
+  function handleTextInvoice(
+    phone: string,
+    quoteId: string,
+    customerName: string,
+  ) {
+    const invoiceUrl = `${window.location.origin}/dashboard/invoices/${quoteId}`;
+    const message = `Hi ${customerName}, your vehicle service is complete! Here is your final invoice: ${invoiceUrl}`;
+    window.location.href = `sms:${phone}?body=${encodeURIComponent(message)}`;
+  }
 
   function handleTextQuote(phone: string, token: string, customerName: string) {
     const quoteUrl = `${window.location.origin}/quote/${token}`;
@@ -135,35 +181,123 @@ function QuotesHubContent() {
                         {quote.overall_status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                      <a
-                        href={`/quote/${quote.public_token}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium transition"
-                      >
-                        View Web Page
-                      </a>
-                      <button
-                        onClick={() => handleCopyLink(quote.public_token)}
-                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium transition"
-                      >
-                        Copy Link
-                      </button>
-                      {quote.customer?.phone && (
-                        <button
-                          onClick={() =>
-                            handleTextQuote(
-                              quote.customer!.phone,
-                              quote.public_token,
-                              quote.customer!.name,
-                            )
-                          }
-                          className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-medium transition"
+
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 flex-wrap">
+                        {quote.overall_status === "approved" && (
+                          <button
+                            onClick={() =>
+                              handleUpdateStatus(
+                                quote.id,
+                                quote.car_id,
+                                "parts_ordered",
+                              )
+                            }
+                            className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                          >
+                            📦 Mark Parts Ordered
+                          </button>
+                        )}
+
+                        {quote.overall_status === "parts_ordered" && (
+                          <button
+                            onClick={() =>
+                              handleUpdateStatus(
+                                quote.id,
+                                quote.car_id,
+                                "parts_arrived",
+                              )
+                            }
+                            className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                          >
+                            ✅ Parts Arrived
+                          </button>
+                        )}
+
+                        {quote.overall_status === "parts_arrived" && (
+                          <button
+                            onClick={() =>
+                              handleUpdateStatus(
+                                quote.id,
+                                quote.car_id,
+                                "in_repair",
+                              )
+                            }
+                            className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                          >
+                            🔧 Start Repair Work
+                          </button>
+                        )}
+
+                        {quote.overall_status === "in_repair" && (
+                          <button
+                            onClick={() =>
+                              handleUpdateStatus(
+                                quote.id,
+                                quote.car_id,
+                                "completed",
+                              )
+                            }
+                            className="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                          >
+                            🏁 Complete & Invoice
+                          </button>
+                        )}
+
+                        {quote.overall_status === "completed" && (
+                          <>
+                            <a
+                              href={`/dashboard/invoices/${quote.id}`}
+                              className="text-xs bg-gray-900 hover:bg-black text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                            >
+                              📄 View Invoice
+                            </a>
+                            {quote.customer?.phone && (
+                              <button
+                                onClick={() =>
+                                  handleTextInvoice(
+                                    quote.customer!.phone,
+                                    quote.id,
+                                    quote.customer!.name,
+                                  )
+                                }
+                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                              >
+                                📱 Text Invoice
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        <a
+                          href={`/quote/${quote.public_token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
                         >
-                          📱 Re-Text Quote
+                          View Web Page
+                        </a>
+                        <button
+                          onClick={() => handleCopyLink(quote.public_token)}
+                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                        >
+                          Copy Link
                         </button>
-                      )}
+                        {quote.customer?.phone && (
+                          <button
+                            onClick={() =>
+                              handleTextQuote(
+                                quote.customer!.phone,
+                                quote.public_token,
+                                quote.customer!.name,
+                              )
+                            }
+                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                          >
+                            📱 Re-Text Quote
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

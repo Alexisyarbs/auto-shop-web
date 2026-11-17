@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "../../utils/supabase/server";
+import { connection } from "next/server";
 
 export const instant = false;
 
@@ -8,6 +9,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  await connection();
   const supabase = await createClient();
 
   // Check if the user has an active session on the server

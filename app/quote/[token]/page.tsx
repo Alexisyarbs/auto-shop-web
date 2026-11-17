@@ -13,18 +13,23 @@ function PublicQuoteContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // E-Signature and submission state
+  const [signature, setSignature] = useState("");
+  const [agreed, setAgreed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
   useEffect(() => {
     async function fetchPublicQuote() {
       if (!token) return;
       setLoading(true);
 
-      // Fetch quote by public token with all related shop, customer, car, jobs, and diagnostic inspection findings
       const { data, error } = await supabase
         .from("quotes")
         .select(
           `
           *,
-          shop:shop_id ( shop_name, phone, address ),
+          shop:shop_id ( shop_name, address ),
           customer:customer_id ( name, phone ),
           car:car_id ( year, make, model, vin, miles ),
           quote_jobs (
@@ -51,32 +56,87 @@ function PublicQuoteContent() {
         .eq("public_token", token)
         .single();
 
+      if (error) {
+        console.error("SUPABASE FETCH ERROR:", error);
+      }
+
       if (error || !data) {
         setError("Quote not found or link has expired.");
       } else {
         setQuote(data);
+        // If already submitted previously, reflect it
+        if (data.overall_status && data.overall_status !== "pending") {
+          setSubmitted(true);
+        }
       }
       setLoading(false);
     }
     fetchPublicQuote();
   }, [token]);
 
-  async function handleUpdateDecision(
+  // 1. Toggle decision locally (does not save to DB until final submit)
+  function handleToggleDecision(
     jobId: string,
     decision: "approved" | "declined",
   ) {
-    const { error } = await supabase
-      .from("quote_jobs")
-      .update({ customer_decision: decision })
-      .eq("id", jobId);
+    if (submitted) return; // Lock if already submitted
+    setQuote({
+      ...quote,
+      quote_jobs: quote.quote_jobs.map((j: any) =>
+        j.id === jobId ? { ...j, customer_decision: decision } : j,
+      ),
+    });
+  }
 
-    if (!error) {
-      setQuote({
-        ...quote,
-        quote_jobs: quote.quote_jobs.map((j: any) =>
-          j.id === jobId ? { ...j, customer_decision: decision } : j,
-        ),
-      });
+  // 2. Final batch submission with e-signature
+  async function handleSubmitApprovals(e: React.FormEvent) {
+    e.preventDefault();
+    if (!signature.trim() || !agreed) return;
+
+    setSubmitting(true);
+
+    try {
+      // Update each job decision in Supabase
+      for (const job of quote.quote_jobs) {
+        await supabase
+          .from("quote_jobs")
+          .update({ customer_decision: job.customer_decision || "declined" })
+          .eq("id", job.id);
+      }
+
+      // Calculate totals
+      const hasApproved = quote.quote_jobs.some(
+        (j: any) => j.customer_decision === "approved",
+      );
+      const newOverallStatus = hasApproved ? "approved" : "declined";
+      const newCarStatus = hasApproved
+        ? "repair_approved"
+        : "estimate_declined";
+
+      // Update parent quote with signature & status
+      await supabase
+        .from("quotes")
+        .update({
+          overall_status: newOverallStatus,
+          customer_signature: signature,
+          approved_at: new Date().toISOString(),
+        })
+        .eq("id", quote.id);
+
+      // Update vehicle status
+      if (quote.car_id) {
+        await supabase
+          .from("car")
+          .update({ status: newCarStatus })
+          .eq("id", quote.car_id);
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      console.error("Error submitting approval:", err);
+      alert("Failed to submit approval. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -115,7 +175,7 @@ function PublicQuoteContent() {
             {quote.shop?.shop_name || "Auto Repair Shop"}
           </h1>
           <p className="text-sm text-gray-500">
-            {quote.shop?.phone} | Digital Vehicle Inspection & Estimate
+            Digital Vehicle Inspection & Repair Estimate
           </p>
         </div>
 
@@ -130,13 +190,79 @@ function PublicQuoteContent() {
           <p className="text-sm text-blue-200">
             Owner: {quote.customer?.name}{" "}
             {quote.car?.miles ? `• ${quote.car.miles.toLocaleString()} mi` : ""}
-            {quote.diagnostics?.obd_codes
-              ? ` • OBD Codes: ${quote.diagnostics.obd_codes}`
-              : ""}
           </p>
         </div>
+        {/* Live Vehicle Status Progress Bar */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500">
+            Repair Status Tracker
+          </h3>
 
-        {/* DVI Inspection Findings with Photos/Videos */}
+          {(() => {
+            const status = quote.overall_status || "pending";
+            const steps = [
+              { key: "pending", label: "Awaiting Approval" },
+              { key: "parts_ordered", label: "Parts Ordered" },
+              { key: "parts_arrived", label: "Parts Arrived" },
+              { key: "in_repair", label: "In Repair" },
+              { key: "completed", label: "Ready for Pickup" },
+            ];
+
+            // Determine current active step index
+            const statusOrder = [
+              "pending",
+              "approved",
+              "parts_ordered",
+              "parts_arrived",
+              "in_repair",
+              "completed",
+            ];
+            const currentIndex = statusOrder.indexOf(status);
+
+            return (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  <div
+                    className={`p-3 rounded-lg border text-xs font-bold ${status === "pending" ? "bg-amber-50 border-amber-300 text-amber-800" : "bg-gray-50 text-gray-400"}`}
+                  >
+                    1. Estimate Pending
+                  </div>
+                  <div
+                    className={`p-3 rounded-lg border text-xs font-bold ${["approved", "parts_ordered"].includes(status) ? "bg-blue-50 border-blue-300 text-blue-800" : "bg-gray-50 text-gray-400"}`}
+                  >
+                    2. Parts Ordered
+                  </div>
+                  <div
+                    className={`p-3 rounded-lg border text-xs font-bold ${["parts_arrived", "in_repair"].includes(status) ? "bg-indigo-50 border-indigo-300 text-indigo-800" : "bg-gray-50 text-gray-400"}`}
+                  >
+                    3. Work in Progress
+                  </div>
+                  <div
+                    className={`p-3 rounded-lg border text-xs font-bold ${status === "completed" ? "bg-green-50 border-green-300 text-green-800" : "bg-gray-50 text-gray-400"}`}
+                  >
+                    4. Ready for Pickup
+                  </div>
+                </div>
+                <p className="text-xs text-center text-gray-500 italic">
+                  {status === "pending" &&
+                    "Please review and approve your estimate above."}
+                  {status === "approved" &&
+                    "Estimate approved! Preparing parts order."}
+                  {status === "parts_ordered" &&
+                    "Parts have been ordered and are on their way."}
+                  {status === "parts_arrived" &&
+                    "Parts are in stock. Scheduling your service bay."}
+                  {status === "in_repair" &&
+                    "Our technicians are actively working on your vehicle."}
+                  {status === "completed" &&
+                    "Your vehicle service is complete and ready to roll!"}
+                </p>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* DVI Inspection Findings */}
         {quote.diagnostics?.diagnostics_results &&
           quote.diagnostics.diagnostics_results.length > 0 && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
@@ -161,16 +287,12 @@ function PublicQuoteContent() {
                         <h4 className="font-bold text-gray-900 text-sm">
                           {res.diagnostics_item?.name}
                         </h4>
-                        <span className="text-xs uppercase bg-white px-2 py-0.5 rounded border text-gray-600">
-                          {res.diagnostics_item?.category}
-                        </span>
                       </div>
                       <p className="text-xs text-gray-600 pl-6">
                         {res.mechanic_notes || "Checked and inspected."}
                       </p>
                     </div>
 
-                    {/* Inspection Photo/Video preview */}
                     {res.media_url && (
                       <div className="w-full sm:w-28 h-20 bg-black rounded overflow-hidden flex-shrink-0 border">
                         {res.media_url.includes(".mp4") ||
@@ -209,7 +331,9 @@ function PublicQuoteContent() {
                 Repair Estimate
               </h3>
               <p className="text-xs text-gray-500">
-                Review jobs below and approve what you would like done.
+                {submitted
+                  ? "Estimate has been submitted and locked."
+                  : "Select approve or decline for each job below."}
               </p>
             </div>
             <div className="text-right">
@@ -251,28 +375,31 @@ function PublicQuoteContent() {
                       <span className="font-black text-gray-900 text-lg">
                         ${jobTotal.toFixed(2)}
                       </span>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() =>
-                            handleUpdateDecision(job.id, "approved")
-                          }
-                          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${isApproved ? "bg-green-600 text-white shadow" : "bg-gray-100 text-gray-700 hover:bg-green-100"}`}
-                        >
-                          {isApproved ? "✓ Approved" : "Approve"}
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleUpdateDecision(job.id, "declined")
-                          }
-                          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${isDeclined ? "bg-red-600 text-white shadow" : "bg-gray-100 text-gray-700 hover:bg-red-100"}`}
-                        >
-                          {isDeclined ? "✕ Declined" : "Decline"}
-                        </button>
-                      </div>
+                      {!submitted && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleToggleDecision(job.id, "approved")
+                            }
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${isApproved ? "bg-green-600 text-white shadow" : "bg-gray-100 text-gray-700 hover:bg-green-100"}`}
+                          >
+                            {isApproved ? "✓ Approved" : "Approve"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleToggleDecision(job.id, "declined")
+                            }
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${isDeclined ? "bg-red-600 text-white shadow" : "bg-gray-100 text-gray-700 hover:bg-red-100"}`}
+                          >
+                            {isDeclined ? "✕ Declined" : "Decline"}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Line items */}
                   <div className="pt-3 space-y-2">
                     {job.quote_job_items.map((item: any) => (
                       <div
@@ -298,6 +425,70 @@ function PublicQuoteContent() {
               );
             })}
           </div>
+
+          {/* Submission & E-Signature Box */}
+          {submitted ? (
+            <div className="p-6 bg-green-50 border border-green-200 rounded-xl text-center space-y-2">
+              <h4 className="text-lg font-bold text-green-800">
+                ✅ Estimate Successfully Submitted!
+              </h4>
+              <p className="text-sm text-green-700">
+                Thank you! Your choices and signature have been sent to the
+                service team. We will be in touch shortly.
+              </p>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleSubmitApprovals}
+              className="pt-6 border-t space-y-4"
+            >
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-gray-900">
+                  Authorization & E-Signature *
+                </label>
+                <p className="text-xs text-gray-500">
+                  By signing below, you authorize the shop to perform the
+                  approved repairs listed above at the specified total estimate.
+                </p>
+                <input
+                  type="text"
+                  required
+                  placeholder="Type your full legal name as signature"
+                  value={signature}
+                  onChange={(e) => setSignature(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="agree"
+                  required
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <label
+                  htmlFor="agree"
+                  className="text-xs text-gray-700 select-none"
+                >
+                  I agree to the repair terms and authorize the selected
+                  services.
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || !signature.trim() || !agreed}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-bold rounded-xl shadow transition"
+              >
+                {submitting
+                  ? "Submitting Authorization..."
+                  : "Submit Repair Authorization"}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>
@@ -309,7 +500,7 @@ export default function PublicQuotePage() {
     <Suspense
       fallback={
         <div className="p-8 text-center text-gray-500">
-          Loading quote builder...
+          Loading quote approval...
         </div>
       }
     >

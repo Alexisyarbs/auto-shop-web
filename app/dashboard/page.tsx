@@ -181,6 +181,31 @@ function DashboardContent() {
                 View All Quotes
               </a>
             </div>
+            {/* Efficiency Dashboard Navigation Card */}
+            <a
+              href="/dashboard/efficiency"
+              className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 hover:shadow-md transition block space-y-2"
+            >
+              <div className="text-2xl">⏱️</div>
+              <h3 className="font-bold text-gray-900">Mechanic Efficiency</h3>
+              <p className="text-xs text-gray-500">
+                Monitor technician clock-ins, total logged hours, and shop
+                productivity.
+              </p>
+            </a>
+            {/* Employees Management Card */}
+            <a
+              href="/dashboard/employees"
+              className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 hover:shadow-md transition block space-y-2"
+            >
+              <div className="text-2xl">👥</div>
+              <h3 className="font-bold text-gray-900">
+                Shop Staff & Mechanics
+              </h3>
+              <p className="text-xs text-gray-500">
+                View active technicians, manage roles, and add new team members.
+              </p>
+            </a>
           </div>
         </div>
       </div>
@@ -189,7 +214,13 @@ function DashboardContent() {
 }
 export default function DiagnosticsPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading diagnostics workspace...</div>}>
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-gray-500">
+          Loading diagnostics workspace...
+        </div>
+      }
+    >
       <DashboardContent />
     </Suspense>
   );
