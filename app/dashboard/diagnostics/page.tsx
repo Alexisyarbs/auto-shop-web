@@ -326,6 +326,7 @@ function DiagnosticsWorkspaceContent() {
       diagnostics_item_id: itemId,
       grade: results[itemId].grade,
       mechanic_notes: results[itemId].mechanic_notes || "",
+      media_url: results[itemId].media_url || null,
     }));
 
     const { error: resError } = await supabase

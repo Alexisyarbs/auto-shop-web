@@ -242,11 +242,12 @@ function NewQuoteContent() {
     const fourteenDaysInMs = 14 * 24 * 60 * 60 * 1000;
     const expiresAt = new Date(Date.now() + fourteenDaysInMs).toISOString();
 
+    // 1. Insert Quote (properly linking diagnosticId so OBD & DVI photos appear on the quote page)
     const { data: quote, error: quoteError } = await supabase
       .from("quotes")
       .insert({
         shop_id: shopId,
-        diagnostics_id: diagnosticId || null,
+        diagnostics_id: diagnosticId || null, // 👈 Linked here!
         customer_id: customerId,
         car_id: carId,
         overall_status: "pending",
@@ -262,8 +263,8 @@ function NewQuoteContent() {
       return;
     }
 
+    // 2. Insert Quote Jobs & Items
     for (const job of jobs) {
-      // Note: Make sure your quote_jobs table has a column for inspection_grade if storing it, or store it in description/metadata
       const { data: quoteJob, error: jobError } = await supabase
         .from("quote_jobs")
         .insert({
@@ -291,26 +292,18 @@ function NewQuoteContent() {
       }
     }
 
+    // 3. Update Vehicle Status
     await supabase
       .from("car")
       .update({ status: "awaiting_quote_approval" })
       .eq("id", carId);
 
-    if (sendSms && customer?.phone) {
-      alert(
-        `Quote saved successfully! SMS dispatch triggered to ${customer.phone}`,
-      );
-    } else {
-      alert("Quote saved successfully!");
-    }
-
     setSubmitting(false);
-    router.push("/dashboard/diagnostics/completed");
+
+    // 4. Handle SMS Text or Redirect
     if (sendSms && customer?.phone) {
       const publicQuoteUrl = `${window.location.origin}/quote/${publicToken}`;
-      const smsMessage = `Hi ${customer.name}, here is your vehicle repair estimate: ${publicQuoteUrl}`;
-
-      // Opens the phone's native text messaging app automatically
+      const smsMessage = `Hi ${customer.name}, here is your vehicle repair estimate & inspection report: ${publicQuoteUrl}`;
       window.location.href = `sms:${customer.phone}?body=${encodeURIComponent(smsMessage)}`;
     } else {
       alert("Quote saved successfully!");
