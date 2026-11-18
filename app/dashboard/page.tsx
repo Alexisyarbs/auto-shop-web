@@ -206,6 +206,47 @@ function DashboardContent() {
                 View active technicians, manage roles, and add new team members.
               </p>
             </a>
+            {/* Purchase Orders & Vendors Card */}
+            <a
+              href="/dashboard/purchase-orders"
+              className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 hover:shadow-md transition block space-y-2"
+            >
+              <div className="text-2xl">📦</div>
+              <h3 className="font-bold text-gray-900">
+                Purchase Orders & Vendors
+              </h3>
+              <p className="text-xs text-gray-500">
+                Manage parts suppliers, log order costs, and track incoming
+                shipments.
+              </p>
+            </a>
+            {/* Appointments & Schedule Card */}
+            <a
+              href="/dashboard/appointments"
+              className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 hover:shadow-md transition block space-y-2"
+            >
+              <div className="text-2xl">📅</div>
+              <h3 className="font-bold text-gray-900">
+                Appointments & Schedule
+              </h3>
+              <p className="text-xs text-gray-500">
+                Book customer drop-offs and manage shop bay capacity.
+              </p>
+            </a>
+            {/* Shop Settings & Stripe Card */}
+            <a
+              href="/dashboard/settings"
+              className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 hover:shadow-md transition block space-y-2"
+            >
+              <div className="text-2xl">⚙️</div>
+              <h3 className="font-bold text-gray-900">
+                Shop Settings & Stripe
+              </h3>
+              <p className="text-xs text-gray-500">
+                Manage your business profile and connect your Stripe account for
+                invoice payouts.
+              </p>
+            </a>
           </div>
         </div>
       </div>
