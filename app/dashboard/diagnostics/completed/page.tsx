@@ -2,11 +2,13 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { createClient } from "../../../../utils/supabase/client";
+import { parseAndFetchObdCodes } from "@/utils/obdFetcher";
 
 type DiagnosticSession = {
   id: string;
   created_at: string;
   vehicle_mileage: number | null;
+  obd_codes: string | null; // 👈 Added OBD-II string column
   status: string;
   customer?: { id: string; name: string; phone: string };
   car?: { id: string; year: number; make: string; model: string; vin: string };
@@ -17,6 +19,64 @@ type DiagnosticSession = {
     diagnostics_item?: { name: string; category: string };
   }[];
 };
+
+function ObdCodesBadge({ rawCodes }: { rawCodes: string | null }) {
+  const [decoded, setDecoded] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!rawCodes) return;
+    async function loadCodes() {
+      setLoading(true);
+      const results = await parseAndFetchObdCodes(rawCodes || "");
+      setDecoded(results);
+      setLoading(false);
+    }
+    loadCodes();
+  }, [rawCodes]);
+
+  if (!rawCodes) return null;
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg space-y-3 mt-4">
+      <div className="flex justify-between items-center">
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+          Scanned OBD-II Trouble Codes
+        </h4>
+        <span className="text-[10px] text-gray-400">Powered by AutoTools</span>
+      </div>
+
+      {loading ? (
+        <p className="text-xs text-gray-500 animate-pulse">
+          Translating trouble codes...
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {decoded.map((item, idx) => (
+            <div
+              key={idx}
+              className="bg-white p-3 rounded border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm"
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
+                  {item.code}
+                </span>
+                <span className="text-gray-900 font-semibold">
+                  {item.meaning}
+                </span>
+              </div>
+              {item.system && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded self-start sm:self-auto">
+                  {item.system}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CompletedDiagnosticsContent() {
   const supabase = createClient();
@@ -53,7 +113,6 @@ function CompletedDiagnosticsContent() {
   }, []);
 
   async function handleCreateQuote(diag: DiagnosticSession) {
-    // We will build the quote creation page next, but this sets up the navigation/link
     window.location.href = `/dashboard/quotes/new?diagnostic_id=${diag.id}&customer_id=${diag.customer?.id}&car_id=${diag.car?.id}`;
   }
 
@@ -126,8 +185,11 @@ function CompletedDiagnosticsContent() {
                   </button>
                 </div>
 
+                {/* OBD-II Trouble Codes Translated Section */}
+                <ObdCodesBadge rawCodes={diag.obd_codes} />
+
                 {/* Inspection Findings Summary */}
-                <div>
+                <div className="pt-2">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
                     Flagged Items / Recommendations ({urgentItems.length})
                   </h4>

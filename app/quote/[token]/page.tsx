@@ -3,6 +3,66 @@
 import { useState, useEffect, Suspense } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "../../../utils/supabase/client";
+import { parseAndFetchObdCodes } from "@/utils/obdFetcher"; // 👈 Imported parser
+
+// Client component to render translated OBD codes
+function PublicObdBadge({ rawCodes }: { rawCodes: string | null }) {
+  const [decoded, setDecoded] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!rawCodes) return;
+    async function loadCodes() {
+      setLoading(true);
+      const results = await parseAndFetchObdCodes(rawCodes || "");
+      setDecoded(results);
+      setLoading(false);
+    }
+    loadCodes();
+  }, [rawCodes]);
+
+  if (!rawCodes) return null;
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-3 mb-6">
+      <div className="flex justify-between items-center">
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+          Scanned OBD-II Trouble Codes
+        </h4>
+        <span className="text-[10px] text-gray-400">Powered by AutoTools</span>
+      </div>
+
+      {loading ? (
+        <p className="text-xs text-gray-500 animate-pulse">
+          Translating trouble codes...
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {decoded.map((item, idx) => (
+            <div
+              key={idx}
+              className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm"
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded text-xs">
+                  {item.code}
+                </span>
+                <span className="text-gray-900 font-semibold">
+                  {item.meaning}
+                </span>
+              </div>
+              {item.system && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded self-start sm:self-auto">
+                  {item.system}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PublicQuoteContent() {
   const supabase = createClient();
@@ -64,7 +124,6 @@ function PublicQuoteContent() {
         setError("Quote not found or link has expired.");
       } else {
         setQuote(data);
-        // If already submitted previously, reflect it
         if (data.overall_status && data.overall_status !== "pending") {
           setSubmitted(true);
         }
@@ -74,12 +133,11 @@ function PublicQuoteContent() {
     fetchPublicQuote();
   }, [token]);
 
-  // 1. Toggle decision locally (does not save to DB until final submit)
   function handleToggleDecision(
     jobId: string,
     decision: "approved" | "declined",
   ) {
-    if (submitted) return; // Lock if already submitted
+    if (submitted) return;
     setQuote({
       ...quote,
       quote_jobs: quote.quote_jobs.map((j: any) =>
@@ -88,7 +146,6 @@ function PublicQuoteContent() {
     });
   }
 
-  // 2. Final batch submission with e-signature
   async function handleSubmitApprovals(e: React.FormEvent) {
     e.preventDefault();
     if (!signature.trim() || !agreed) return;
@@ -96,7 +153,6 @@ function PublicQuoteContent() {
     setSubmitting(true);
 
     try {
-      // Update each job decision in Supabase
       for (const job of quote.quote_jobs) {
         await supabase
           .from("quote_jobs")
@@ -104,7 +160,6 @@ function PublicQuoteContent() {
           .eq("id", job.id);
       }
 
-      // Calculate totals
       const hasApproved = quote.quote_jobs.some(
         (j: any) => j.customer_decision === "approved",
       );
@@ -113,7 +168,6 @@ function PublicQuoteContent() {
         ? "repair_approved"
         : "estimate_declined";
 
-      // Update parent quote with signature & status
       await supabase
         .from("quotes")
         .update({
@@ -123,7 +177,6 @@ function PublicQuoteContent() {
         })
         .eq("id", quote.id);
 
-      // Update vehicle status
       if (quote.car_id) {
         await supabase
           .from("car")
@@ -153,7 +206,6 @@ function PublicQuoteContent() {
       </div>
     );
 
-  // Calculate total of approved jobs
   const approvedTotal = quote.quote_jobs.reduce((sum: number, job: any) => {
     if (job.customer_decision === "approved") {
       const jobSum = job.quote_job_items.reduce(
@@ -192,7 +244,8 @@ function PublicQuoteContent() {
             {quote.car?.miles ? `• ${quote.car.miles.toLocaleString()} mi` : ""}
           </p>
         </div>
-        {/* Live Vehicle Status Progress Bar */}
+
+        {/* Repair Status Tracker */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500">
             Repair Status Tracker
@@ -200,25 +253,6 @@ function PublicQuoteContent() {
 
           {(() => {
             const status = quote.overall_status || "pending";
-            const steps = [
-              { key: "pending", label: "Awaiting Approval" },
-              { key: "parts_ordered", label: "Parts Ordered" },
-              { key: "parts_arrived", label: "Parts Arrived" },
-              { key: "in_repair", label: "In Repair" },
-              { key: "completed", label: "Ready for Pickup" },
-            ];
-
-            // Determine current active step index
-            const statusOrder = [
-              "pending",
-              "approved",
-              "parts_ordered",
-              "parts_arrived",
-              "in_repair",
-              "completed",
-            ];
-            const currentIndex = statusOrder.indexOf(status);
-
             return (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
@@ -262,66 +296,73 @@ function PublicQuoteContent() {
           })()}
         </div>
 
-        {/* DVI Inspection Findings */}
-        {quote.diagnostics?.diagnostics_results &&
-          quote.diagnostics.diagnostics_results.length > 0 && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
-              <h3 className="text-lg font-bold text-gray-900 border-b pb-2">
-                🔍 Multi-Point Inspection Findings
-              </h3>
-              <div className="space-y-4">
-                {quote.diagnostics.diagnostics_results.map((res: any) => (
-                  <div
-                    key={res.id}
-                    className={`p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${res.grade === "red" ? "bg-red-50 border-red-200" : res.grade === "yellow" ? "bg-yellow-50 border-yellow-200" : "bg-gray-50 border-gray-200"}`}
-                  >
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {res.grade === "red"
-                            ? "🔴"
-                            : res.grade === "yellow"
-                              ? "🟡"
-                              : "🟢"}
-                        </span>
-                        <h4 className="font-bold text-gray-900 text-sm">
-                          {res.diagnostics_item?.name}
-                        </h4>
-                      </div>
-                      <p className="text-xs text-gray-600 pl-6">
-                        {res.mechanic_notes || "Checked and inspected."}
-                      </p>
-                    </div>
+        {/* DVI Inspection Findings & OBD Codes */}
+        {quote.diagnostics && (
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+            <h3 className="text-lg font-bold text-gray-900 border-b pb-2">
+              🔍 Multi-Point Inspection Findings
+            </h3>
 
-                    {res.media_url && (
-                      <div className="w-full sm:w-28 h-20 bg-black rounded overflow-hidden flex-shrink-0 border">
-                        {res.media_url.includes(".mp4") ||
-                        res.media_url.includes(".mov") ? (
-                          <video
-                            src={res.media_url}
-                            controls
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <a
-                            href={res.media_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <img
-                              src={res.media_url}
-                              alt="Inspection finding"
-                              className="w-full h-full object-cover hover:opacity-95 transition"
-                            />
-                          </a>
-                        )}
+            {/* Render Translated OBD Codes Badge */}
+            <PublicObdBadge rawCodes={quote.diagnostics.obd_codes} />
+
+            {/* Findings List */}
+            {quote.diagnostics.diagnostics_results &&
+              quote.diagnostics.diagnostics_results.length > 0 && (
+                <div className="space-y-4">
+                  {quote.diagnostics.diagnostics_results.map((res: any) => (
+                    <div
+                      key={res.id}
+                      className={`p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${res.grade === "red" ? "bg-red-50 border-red-200" : res.grade === "yellow" ? "bg-yellow-50 border-yellow-200" : "bg-gray-50 border-gray-200"}`}
+                    >
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {res.grade === "red"
+                              ? "🔴"
+                              : res.grade === "yellow"
+                                ? "🟡"
+                                : "🟢"}
+                          </span>
+                          <h4 className="font-bold text-gray-900 text-sm">
+                            {res.diagnostics_item?.name}
+                          </h4>
+                        </div>
+                        <p className="text-xs text-gray-600 pl-6">
+                          {res.mechanic_notes || "Checked and inspected."}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+
+                      {res.media_url && (
+                        <div className="w-full sm:w-28 h-20 bg-black rounded overflow-hidden flex-shrink-0 border">
+                          {res.media_url.includes(".mp4") ||
+                          res.media_url.includes(".mov") ? (
+                            <video
+                              src={res.media_url}
+                              controls
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <a
+                              href={res.media_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <img
+                                src={res.media_url}
+                                alt="Inspection finding"
+                                className="w-full h-full object-cover hover:opacity-95 transition"
+                              />
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+        )}
 
         {/* Interactive Quote & Approval Section */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-6">
