@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "../../../../utils/supabase/client";
+import { createInvoiceCheckoutSession } from "./actions";
 
 function InvoiceContent() {
   const supabase = createClient();
@@ -11,6 +12,7 @@ function InvoiceContent() {
 
   const [invoice, setInvoice] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     async function fetchInvoice() {
@@ -45,6 +47,19 @@ function InvoiceContent() {
     fetchInvoice();
   }, [quoteId]);
 
+  async function handleStripeCheckout() {
+    try {
+      setPaying(true);
+      const { url } = await createInvoiceCheckoutSession(quoteId);
+      if (url) {
+        window.location.href = url;
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to start checkout");
+      setPaying(false);
+    }
+  }
+
   if (loading)
     return (
       <div className="p-8 text-center text-gray-500">Generating invoice...</div>
@@ -74,19 +89,28 @@ function InvoiceContent() {
     <div className="min-h-screen bg-gray-100 py-8 px-4 print:bg-white print:p-0">
       <div className="max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-sm border border-gray-200 print:shadow-none print:border-none space-y-8">
         {/* Action Controls (Hidden when printing) */}
-        <div className="flex justify-between items-center print:hidden border-b pb-4">
+        <div className="flex justify-between items-center print:hidden border-b pb-4 flex-wrap gap-3">
           <a
             href="/dashboard/quotes"
             className="text-sm text-blue-600 hover:underline"
           >
             &larr; Back to Quotes
           </a>
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow transition"
-          >
-            🖨️ Print / Save as PDF
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleStripeCheckout}
+              disabled={paying}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow transition disabled:opacity-50 flex items-center gap-1.5"
+            >
+              <span>{paying ? "Redirecting..." : "💳 Pay with Stripe"}</span>
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow transition"
+            >
+              🖨️ Print / Save as PDF
+            </button>
+          </div>
         </div>
 
         {/* Invoice Header */}
@@ -112,7 +136,7 @@ function InvoiceContent() {
         </div>
 
         {/* Customer & Vehicle Info */}
-        <div className="grid grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg print:bg-gray-50 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg print:bg-gray-50 text-sm">
           <div>
             <h3 className="font-bold text-gray-700 uppercase text-xs mb-1">
               Billed To:
