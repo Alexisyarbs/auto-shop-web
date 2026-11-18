@@ -56,7 +56,6 @@ function QuotesHubContent() {
     let newQuoteStatus = nextStage;
     let newCarStatus = nextStage;
 
-    // Update Quote status and Car status in Supabase
     const { error: quoteError } = await supabase
       .from("quotes")
       .update({ overall_status: newQuoteStatus })
@@ -75,7 +74,6 @@ function QuotesHubContent() {
         .eq("id", carId);
     }
 
-    // Update local state so UI updates immediately without a full refresh
     setQuotes(
       quotes.map((q) =>
         q.id === quoteId ? { ...q, overall_status: newQuoteStatus! } : q,
@@ -106,7 +104,7 @@ function QuotesHubContent() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -116,7 +114,7 @@ function QuotesHubContent() {
           >
             &larr; Back to Dashboard
           </a>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Customer Quotes & Estimates
           </h1>
           <p className="text-sm text-gray-500">
@@ -135,8 +133,9 @@ function QuotesHubContent() {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          {/* Desktop Table Header */}
           <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+            <thead className="bg-gray-50 text-gray-500 uppercase text-xs hidden md:table-header-group">
               <tr>
                 <th className="px-6 py-3 font-semibold">Vehicle & Customer</th>
                 <th className="px-6 py-3 font-semibold">Created Date</th>
@@ -145,9 +144,8 @@ function QuotesHubContent() {
                 <th className="px-6 py-3 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-gray-200 bg-white block md:table-row-group">
               {quotes.map((quote) => {
-                // Calculate quote total
                 const total =
                   quote.quote_jobs?.reduce((sum, job) => {
                     const jobSum =
@@ -160,30 +158,53 @@ function QuotesHubContent() {
                   }, 0) || 0;
 
                 return (
-                  <tr key={quote.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-gray-900">
+                  <tr
+                    key={quote.id}
+                    className="hover:bg-gray-50 block md:table-row p-4 md:p-0 border-b md:border-none"
+                  >
+                    {/* Vehicle & Customer */}
+                    <td className="px-4 md:px-6 py-3 md:py-4 block md:table-cell">
+                      <div className="font-bold text-gray-900 text-base md:text-sm">
                         {quote.car?.year} {quote.car?.make} {quote.car?.model}
                       </div>
                       <div className="text-xs text-gray-500">
                         {quote.customer?.name} (
                         {quote.customer?.phone || "No phone"})
                       </div>
+                      {/* Mobile meta info */}
+                      <div className="flex items-center gap-3 mt-2 md:hidden text-xs text-gray-600">
+                        <span>
+                          📅 {new Date(quote.created_at).toLocaleDateString()}
+                        </span>
+                        <span className="font-bold text-blue-600">
+                          ${total.toFixed(2)}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full font-semibold bg-yellow-100 text-yellow-800 uppercase text-[10px]">
+                          {quote.overall_status}
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">
+
+                    {/* Created Date (Desktop) */}
+                    <td className="px-6 py-4 text-gray-600 hidden md:table-cell">
                       {new Date(quote.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 font-black text-blue-600">
+
+                    {/* Total Amount (Desktop) */}
+                    <td className="px-6 py-4 font-black text-blue-600 hidden md:table-cell">
                       ${total.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4">
+
+                    {/* Status (Desktop) */}
+                    <td className="px-6 py-4 hidden md:table-cell">
                       <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 uppercase">
                         {quote.overall_status}
                       </span>
                     </td>
 
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 flex-wrap">
+                    {/* Actions */}
+                    <td className="px-4 md:px-6 py-3 md:py-4 block md:table-cell md:text-right">
+                      <div className="flex items-center md:justify-end gap-2 flex-wrap mt-2 md:mt-0">
                         {quote.overall_status === "approved" && (
                           <button
                             onClick={() =>
@@ -193,7 +214,7 @@ function QuotesHubContent() {
                                 "parts_ordered",
                               )
                             }
-                            className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                            className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-medium transition"
                           >
                             📦 Mark Parts Ordered
                           </button>
@@ -208,7 +229,7 @@ function QuotesHubContent() {
                                 "parts_arrived",
                               )
                             }
-                            className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                            className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium transition"
                           >
                             ✅ Parts Arrived
                           </button>
@@ -223,7 +244,7 @@ function QuotesHubContent() {
                                 "in_repair",
                               )
                             }
-                            className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                            className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded font-medium transition"
                           >
                             🔧 Start Repair Work
                           </button>
@@ -238,7 +259,7 @@ function QuotesHubContent() {
                                 "completed",
                               )
                             }
-                            className="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                            className="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded font-medium transition"
                           >
                             🏁 Complete & Invoice
                           </button>
@@ -248,7 +269,7 @@ function QuotesHubContent() {
                           <>
                             <a
                               href={`/dashboard/invoices/${quote.id}`}
-                              className="text-xs bg-gray-900 hover:bg-black text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                              className="text-xs bg-gray-900 hover:bg-black text-white px-3 py-1.5 rounded font-medium transition"
                             >
                               📄 View Invoice
                             </a>
@@ -261,7 +282,7 @@ function QuotesHubContent() {
                                     quote.customer!.name,
                                   )
                                 }
-                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-medium transition"
                               >
                                 📱 Text Invoice
                               </button>
@@ -273,13 +294,13 @@ function QuotesHubContent() {
                           href={`/quote/${quote.public_token}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium transition"
                         >
                           View Web Page
                         </a>
                         <button
                           onClick={() => handleCopyLink(quote.public_token)}
-                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium transition"
                         >
                           Copy Link
                         </button>
@@ -292,7 +313,7 @@ function QuotesHubContent() {
                                 quote.customer!.name,
                               )
                             }
-                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-medium transition whitespace-nowrap"
+                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-medium transition"
                           >
                             📱 Re-Text Quote
                           </button>
