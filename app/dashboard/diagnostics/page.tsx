@@ -2,12 +2,28 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { createClient } from "../../../utils/supabase/client";
+import { useRouter } from "next/navigation";
+import { parseAndFetchObdCodes } from "@/utils/obdFetcher";
 
 type Customer = {
   id: string;
   name: string;
   phone: string | null;
   email: string | null;
+};
+type DecodedObd = {
+  code: string;
+  meaning: string;
+  system?: string;
+};
+
+type InspectionResultState = {
+  [itemId: string]: {
+    grade: "green" | "yellow" | "red";
+    mechanic_notes: string;
+    media_url?: string;
+    attached_codes?: string[];
+  };
 };
 
 type Car = {
@@ -26,19 +42,15 @@ type DiagnosticItem = {
   name: string;
 };
 
-type InspectionResultState = {
-  [itemId: string]: {
-    grade: "green" | "yellow" | "red";
-    mechanic_notes: string;
-    media_url?: string;
-  };
-};
-
 function DiagnosticsWorkspaceContent() {
   const supabase = createClient();
   const [shopId, setShopId] = useState<string | null>(null);
   const [shopUserId, setShopUserId] = useState<string | null>(null);
   const [items, setItems] = useState<DiagnosticItem[]>([]);
+  const router = useRouter();
+
+  const [decodedObdList, setDecodedObdList] = useState<DecodedObd[]>([]);
+  const [decodingObd, setDecodingObd] = useState(false);
 
   // --- Step 1 Selection State ---
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -76,6 +88,29 @@ function DiagnosticsWorkspaceContent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [obdCodes, setObdCodes] = useState("");
+
+  useEffect(() => {
+    const trimmed = obdCodes.trim();
+    if (!trimmed) {
+      setDecodedObdList([]);
+      return;
+    }
+
+    let cancelled = false;
+    async function decode() {
+      setDecodingObd(true);
+      const parsed = await parseAndFetchObdCodes(trimmed);
+      if (!cancelled) {
+        setDecodedObdList(parsed);
+        setDecodingObd(false);
+      }
+    }
+    decode();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [obdCodes]);
 
   useEffect(() => {
     async function init() {
@@ -309,6 +344,28 @@ function DiagnosticsWorkspaceContent() {
     }));
   }
 
+  function handleToggleCodeOnItem(itemId: string, code: string) {
+    setResults((prev) => {
+      const current = prev[itemId] || {
+        grade: "green" as const,
+        mechanic_notes: "",
+      };
+      const currentCodes = current.attached_codes || [];
+      const exists = currentCodes.includes(code);
+      const updatedCodes = exists
+        ? currentCodes.filter((c) => c !== code)
+        : [...currentCodes, code];
+
+      return {
+        ...prev,
+        [itemId]: {
+          ...current,
+          attached_codes: updatedCodes,
+        },
+      };
+    });
+  }
+
   function handleNotesChange(itemId: string, mechanic_notes: string) {
     setResults((prev) => ({
       ...prev,
@@ -321,13 +378,30 @@ function DiagnosticsWorkspaceContent() {
     setSubmitting(true);
     setError(null);
 
-    const resultsToInsert = Object.keys(results).map((itemId) => ({
-      diagnostics_id: activeDiagnosticId,
-      diagnostics_item_id: itemId,
-      grade: results[itemId].grade,
-      mechanic_notes: results[itemId].mechanic_notes || "",
-      media_url: results[itemId].media_url || null,
-    }));
+    const resultsToInsert = Object.keys(results).map((itemId) => {
+      const attached = results[itemId].attached_codes || [];
+      const attachedDetails = attached
+        .map((code) => {
+          const match = decodedObdList.find((d) => d.code === code);
+          return match ? `${code} (${match.meaning})` : code;
+        })
+        .join(", ");
+
+      const rawNotes = results[itemId].mechanic_notes?.trim() || "";
+      const combinedNotes = attachedDetails
+        ? rawNotes
+          ? `[OBD: ${attachedDetails}] ${rawNotes}`
+          : `[OBD: ${attachedDetails}]`
+        : rawNotes;
+
+      return {
+        diagnostics_id: activeDiagnosticId,
+        diagnostics_item_id: itemId,
+        grade: results[itemId].grade,
+        mechanic_notes: combinedNotes,
+        media_url: results[itemId].media_url || null,
+      };
+    });
 
     const { error: resError } = await supabase
       .from("diagnostics_results")
@@ -348,6 +422,7 @@ function DiagnosticsWorkspaceContent() {
     setIsInspecting(false);
     setActiveDiagnosticId(null);
     setSubmitting(false);
+    router.push("/dashboard");
   }
 
   const filteredCustomersForDropdown = customers.filter(
@@ -574,6 +649,62 @@ function DiagnosticsWorkspaceContent() {
             </button>
           </div>
 
+          {/* Live OBD-II Reference Card During Active DVI */}
+          <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600">
+                Scanned OBD-II Trouble Codes (Click on any checkpoint below to
+                attach)
+              </h3>
+              <input
+                type="text"
+                placeholder="Add/edit codes (e.g. P0300, P0420)"
+                value={obdCodes}
+                onChange={(e) => {
+                  setObdCodes(e.target.value);
+                  if (activeDiagnosticId) {
+                    supabase
+                      .from("diagnostics")
+                      .update({ obd_codes: e.target.value || null })
+                      .eq("id", activeDiagnosticId);
+                  }
+                }}
+                className="text-xs font-mono border border-gray-300 rounded px-2.5 py-1.5 w-full sm:w-64"
+              />
+            </div>
+
+            {decodingObd ? (
+              <p className="text-xs text-gray-500 animate-pulse">
+                Translating OBD-II codes...
+              </p>
+            ) : decodedObdList.length === 0 ? (
+              <p className="text-xs text-gray-400">No trouble codes entered.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {decodedObdList.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2.5 rounded border border-blue-100 bg-blue-50/40 flex items-start justify-between gap-2 text-xs"
+                  >
+                    <div>
+                      <span className="font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded mr-2">
+                        {item.code}
+                      </span>
+                      <span className="font-semibold text-gray-900">
+                        {item.meaning}
+                      </span>
+                    </div>
+                    {item.system && (
+                      <span className="text-[10px] bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded shrink-0">
+                        {item.system}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {items.length === 0 ? (
             <div className="bg-white p-8 rounded-lg text-center text-gray-500">
               No inspection checkpoints configured! Go to{" "}
@@ -641,6 +772,37 @@ function DiagnosticsWorkspaceContent() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Attach Scanned OBD Codes to this Checkpoint */}
+                    {decodedObdList.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[11px] font-semibold text-gray-500 mr-1">
+                          Attach Code:
+                        </span>
+                        {decodedObdList.map((obd) => {
+                          const isAttached = results[
+                            item.id
+                          ]?.attached_codes?.includes(obd.code);
+                          return (
+                            <button
+                              key={obd.code}
+                              type="button"
+                              onClick={() =>
+                                handleToggleCodeOnItem(item.id, obd.code)
+                              }
+                              title={obd.meaning}
+                              className={`px-2 py-0.5 rounded text-xs font-mono font-bold border transition ${
+                                isAttached
+                                  ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                  : "bg-gray-50 text-gray-700 border-gray-300 hover:bg-blue-50"
+                              }`}
+                            >
+                              {isAttached ? `✓ ${obd.code}` : `+ ${obd.code}`}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Notes & Media Upload */}
                     <div className="flex flex-col md:flex-row gap-3 items-center">

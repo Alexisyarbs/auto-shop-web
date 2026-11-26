@@ -8,8 +8,8 @@ type QuoteItem = {
   item_type: string; // 'part', 'labor', 'fee'
   part_number?: string;
   name: string;
-  quantity: number;
-  unit_price: number;
+  quantity: number | null;
+  unit_price: number | null;
 };
 
 type QuoteJob = {
@@ -172,8 +172,10 @@ function NewQuoteContent() {
       (i: any) => ({
         item_type: i.item_type,
         name: i.name,
-        quantity: Number(i.default_quantity) || 1,
-        unit_price: Number(i.default_unit_price) || 0,
+        quantity:
+          i.default_quantity != null ? Number(i.default_quantity) : null,
+        unit_price:
+          i.default_unit_price != null ? Number(i.default_unit_price) : null,
       }),
     );
 
@@ -192,7 +194,12 @@ function NewQuoteContent() {
         description: "",
         inspection_grade: null,
         items: [
-          { item_type: "labor", name: "Labor", quantity: 1, unit_price: 100 },
+          {
+            item_type: "labor",
+            name: "Labor",
+            quantity: null,
+            unit_price: null,
+          },
         ],
       },
     ]);
@@ -222,10 +229,15 @@ function NewQuoteContent() {
   }
 
   const grandTotal = jobs.reduce((sum, job) => {
-    const jobSum = job.items.reduce(
-      (jSum, item) => jSum + Number(item.quantity) * Number(item.unit_price),
-      0,
-    );
+    const jobSum = job.items.reduce((jSum, item) => {
+      const q = Number.isFinite(Number(item.quantity))
+        ? Number(item.quantity)
+        : 0;
+      const p = Number.isFinite(Number(item.unit_price))
+        ? Number(item.unit_price)
+        : 0;
+      return jSum + q * p;
+    }, 0);
     return sum + jobSum;
   }, 0);
 
@@ -285,8 +297,14 @@ function NewQuoteContent() {
           item_type: item.item_type,
           part_number: item.part_number || null,
           name: item.name,
-          quantity: Number(item.quantity) || 1,
-          unit_price: Number(item.unit_price) || 0,
+          quantity:
+            item.quantity != null && Number.isFinite(item.quantity)
+              ? item.quantity
+              : 1,
+          unit_price:
+            item.unit_price != null && Number.isFinite(item.unit_price)
+              ? item.unit_price
+              : 0,
         }));
         await supabase.from("quote_job_items").insert(itemsToInsert);
       }
@@ -372,11 +390,15 @@ function NewQuoteContent() {
       {/* Job Blocks Builder */}
       <div className="space-y-6">
         {jobs.map((job, jobIndex) => {
-          const jobTotal = job.items.reduce(
-            (sum, item) =>
-              sum + Number(item.quantity) * Number(item.unit_price),
-            0,
-          );
+          const jobTotal = job.items.reduce((sum, item) => {
+            const q = Number.isFinite(Number(item.quantity))
+              ? Number(item.quantity)
+              : 0;
+            const p = Number.isFinite(Number(item.unit_price))
+              ? Number(item.unit_price)
+              : 0;
+            return sum + q * p;
+          }, 0);
 
           return (
             <div
@@ -556,7 +578,7 @@ function NewQuoteContent() {
                         min="0.1"
                         step="any"
                         placeholder="Qty"
-                        value={item.quantity}
+                        value={item.quantity ?? ""}
                         onChange={(e) => {
                           const updated = [...jobs];
                           updated[jobIndex].items[itemIndex].quantity =
@@ -571,7 +593,7 @@ function NewQuoteContent() {
                         min="0"
                         step="any"
                         placeholder="Price ($)"
-                        value={item.unit_price}
+                        value={item.unit_price ?? ""}
                         onChange={(e) => {
                           const updated = [...jobs];
                           updated[jobIndex].items[itemIndex].unit_price =

@@ -1,7 +1,6 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { stripe } from "../../../../utils/stripe";
 
 export async function createInvoiceCheckoutSession(quoteId: string) {
@@ -45,7 +44,9 @@ export async function createInvoiceCheckoutSession(quoteId: string) {
   }
 
   const publicToken = quote.public_token;
-  const shopInfo = quote.shop as any;
+  const shopInfo = Array.isArray(quote.shop)
+    ? quote.shop[0]
+    : (quote.shop as any);
   const shopId = shopInfo?.id;
   let businessId = shopInfo?.business_id;
 
@@ -54,8 +55,8 @@ export async function createInvoiceCheckoutSession(quoteId: string) {
     : quote.customer;
   const customerEmail = customerObj?.email || undefined;
 
-  // 2. Build line items and calculate subtotal/total in cents (including your 8% tax model)
-  let lineItems: any[] = [];
+  // 2. Build line items and calculate subtotal/total in cents (including 8% tax)
+  const lineItems: any[] = [];
   let subtotalCents = 0;
 
   quote.quote_jobs?.forEach((job: any) => {
@@ -65,17 +66,24 @@ export async function createInvoiceCheckoutSession(quoteId: string) {
         const qty = Number(item.quantity) || 1;
         const itemTotalCents = Math.round(unitCost * qty * 100);
 
+        if (itemTotalCents <= 0) return;
+
         subtotalCents += itemTotalCents;
+
+        const displayName =
+          qty !== 1
+            ? `${item.name || "Auto Repair Service"} (${qty}x)`
+            : item.name || "Auto Repair Service";
 
         lineItems.push({
           price_data: {
             currency: "usd",
             product_data: {
-              name: item.name || "Auto Repair Service",
+              name: displayName,
             },
-            unit_amount: Math.round(unitCost * 100),
+            unit_amount: itemTotalCents,
           },
-          quantity: qty,
+          quantity: 1,
         });
       });
     }
@@ -85,7 +93,20 @@ export async function createInvoiceCheckoutSession(quoteId: string) {
     throw new Error("Cannot checkout an invoice with no approved items.");
   }
 
-  const taxCents = Math.round(subtotalCents * 0.08); // matches your 8% invoice tax
+  const taxCents = Math.round(subtotalCents * 0.08);
+  if (taxCents > 0) {
+    lineItems.push({
+      price_data: {
+        currency: "usd",
+        product_data: {
+          name: "Tax (8%)",
+        },
+        unit_amount: taxCents,
+      },
+      quantity: 1,
+    });
+  }
+
   const totalCents = subtotalCents + taxCents;
 
   // 3. Calculate 1% platform fee in cents
@@ -128,7 +149,7 @@ export async function createInvoiceCheckoutSession(quoteId: string) {
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/quote/${publicToken}?canceled=true`,
       customer_email: customerEmail || undefined,
       payment_intent_data: {
-        application_fee_amount: applicationFeeAmount, // 👈 Automatically routes 1% to your platform balance
+        application_fee_amount: applicationFeeAmount,
       },
     } as any,
     {

@@ -244,8 +244,7 @@ function PublicQuoteContent() {
             {quote.car?.miles ? `• ${quote.car.miles.toLocaleString()} mi` : ""}
           </p>
         </div>
-
-        {/* Repair Status Tracker */}
+        {/* Live Vehicle Status Progress Bar */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500">
             Repair Status Tracker
@@ -253,43 +252,90 @@ function PublicQuoteContent() {
 
           {(() => {
             const status = quote.overall_status || "pending";
+
+            const stages = [
+              {
+                key: "pending",
+                label: "Awaiting Approval",
+                activeStatuses: ["pending"],
+              },
+              {
+                key: "approved",
+                label: "Ordering Parts",
+                activeStatuses: ["approved"],
+              },
+              {
+                key: "parts_ordered",
+                label: "Awaiting Parts Arrival",
+                activeStatuses: ["parts_ordered"],
+              },
+              {
+                key: "parts_arrived",
+                label: "Parts Arrived",
+                activeStatuses: ["parts_arrived"],
+              },
+              {
+                key: "in_repair",
+                label: "In Repair",
+                activeStatuses: ["in_repair"],
+              },
+              {
+                key: "completed",
+                label: "Ready for Pickup",
+                activeStatuses: ["completed"],
+              },
+            ];
+
+            const statusOrder = [
+              "pending",
+              "approved",
+              "parts_ordered",
+              "parts_arrived",
+              "in_repair",
+              "completed",
+            ];
+            const currentIndex = statusOrder.indexOf(status);
+
+            const statusMessages: Record<string, string> = {
+              pending: "Please review and approve your estimate below.",
+              approved:
+                "Estimate approved — our service advisor is placing your parts order.",
+              parts_ordered:
+                "Parts have been ordered and we are waiting for delivery.",
+              parts_arrived:
+                "Parts have arrived at the shop and are staged for your bay.",
+              in_repair: "A technician is actively working on your vehicle.",
+              completed:
+                "Your repair is complete and your vehicle is ready for pickup.",
+            };
+
             return (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                  <div
-                    className={`p-3 rounded-lg border text-xs font-bold ${status === "pending" ? "bg-amber-50 border-amber-300 text-amber-800" : "bg-gray-50 text-gray-400"}`}
-                  >
-                    1. Estimate Pending
-                  </div>
-                  <div
-                    className={`p-3 rounded-lg border text-xs font-bold ${["approved", "parts_ordered"].includes(status) ? "bg-blue-50 border-blue-300 text-blue-800" : "bg-gray-50 text-gray-400"}`}
-                  >
-                    2. Parts Ordered
-                  </div>
-                  <div
-                    className={`p-3 rounded-lg border text-xs font-bold ${["parts_arrived", "in_repair"].includes(status) ? "bg-indigo-50 border-indigo-300 text-indigo-800" : "bg-gray-50 text-gray-400"}`}
-                  >
-                    3. Work in Progress
-                  </div>
-                  <div
-                    className={`p-3 rounded-lg border text-xs font-bold ${status === "completed" ? "bg-green-50 border-green-300 text-green-800" : "bg-gray-50 text-gray-400"}`}
-                  >
-                    4. Ready for Pickup
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
+                  {stages.map((stage, idx) => {
+                    const isCurrent = status === stage.key;
+                    const isDone = currentIndex > idx;
+
+                    return (
+                      <div
+                        key={stage.key}
+                        className={`p-3 rounded-lg border text-xs font-bold transition ${
+                          isCurrent
+                            ? "bg-blue-50 border-blue-400 text-blue-900 ring-1 ring-blue-300"
+                            : isDone
+                              ? "bg-emerald-50/70 border-emerald-200 text-emerald-800"
+                              : "bg-gray-50 border-gray-200 text-gray-400"
+                        }`}
+                      >
+                        {idx + 1}. {stage.label}
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="text-xs text-center text-gray-500 italic">
-                  {status === "pending" &&
-                    "Please review and approve your estimate above."}
-                  {status === "approved" &&
-                    "Estimate approved! Preparing parts order."}
-                  {status === "parts_ordered" &&
-                    "Parts have been ordered and are on their way."}
-                  {status === "parts_arrived" &&
-                    "Parts are in stock. Scheduling your service bay."}
-                  {status === "in_repair" &&
-                    "Our technicians are actively working on your vehicle."}
-                  {status === "completed" &&
-                    "Your vehicle service is complete and ready to roll!"}
+
+                <p className="text-xs text-center text-gray-600 italic">
+                  {statusMessages[status] ||
+                    "Tracking your vehicle service progress."}
                 </p>
               </div>
             );
