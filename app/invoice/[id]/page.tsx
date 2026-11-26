@@ -1,8 +1,10 @@
 import { Suspense } from "react";
 import { createClient } from "../../../utils/supabase/server";
 import PayButton from "./PayButton";
+import { connection } from "next/server";
 
 async function InvoiceDetails({ params }: { params: Promise<{ id: string }> }) {
+  await connection();
   const { id } = await params;
   const supabase = await createClient();
 
