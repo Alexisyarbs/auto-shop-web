@@ -86,7 +86,7 @@ function QuotesHubContent() {
     invoiceId: string,
     customerName: string,
   ) {
-    const invoiceUrl = `${window.location.origin}/dashboard/invoices/${invoiceId}`;
+    const invoiceUrl = `${window.location.origin}/invoice/${invoiceId}`;
     const message = `Hi ${customerName}, your vehicle service is complete! Here is your final invoice: ${invoiceUrl}`;
     window.location.href = `sms:${phone}?body=${encodeURIComponent(message)}`;
   }
